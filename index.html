@@ -126,7 +126,7 @@
         </div>`;
     }
 
-    function showEmpty(msg='CODE สินค้านี้ไม่รวมรายการ Clearance') {
+    function showEmpty(msg='ไม่พบข้อมูล') {
       document.getElementById('result').innerHTML = `<div class="text-center text-slate-500">${msg}</div>`;
     }
 
@@ -176,6 +176,16 @@
     const video = document.getElementById('video');
     let stream = null;
     let quaggaStarted = false;
+	function getFinalCode(raw, format){
+  // ถ้าเป็น QR (format = 'qr_code', 'qr_reader' ฯลฯ) ให้ตัดเฉพาะตำแหน่ง 5–11 (1-based)
+  const fmt = (format || '').toLowerCase();
+  const isQR = fmt.includes('qr');
+  const s = String(raw || '');
+  if (isQR && s.length >= 11) {
+    return s.slice(4, 11); // 0-based slice → ตำแหน่ง 5..11 แบบ inclusive
+  }
+  return s;
+}
 
     async function startNativeDetector(){
   const BarcodeDetectorClass = window.BarcodeDetector;
@@ -192,11 +202,14 @@
         const bitmap = await createImageBitmap(video);
         const codes = await detector.detect(bitmap);
         if (codes && codes.length) {
-          const code = codes[0].rawValue;
-          stopScan();
-          document.getElementById('q').value = code;
-          search(code);
-          return;
+        const det = codes[0];
+const raw = det && det.rawValue ? String(det.rawValue) : '';
+const fmt = det && det.format ? String(det.format) : '';
+const code = getFinalCode(raw, fmt);
+stopScan();
+document.getElementById('q').value = code;
+search(code);
+
         }
       } catch (e) {}
       requestAnimationFrame(scan);
@@ -217,12 +230,15 @@ function startQuagga(){
     quaggaStarted = true;
   });
   Quagga.onDetected(function(result){
-    const code = result.codeResult && result.codeResult.code;
-    if (code) {
-      stopScan();
-      document.getElementById('q').value = code;
-      search(code);
-    }
+    const raw = result.codeResult && result.codeResult.code;
+const fmt = (result.codeResult && (result.codeResult.format || result.codeResult.reader)) || '';
+const code = getFinalCode(raw, fmt);
+if (code) {
+  stopScan();
+  document.getElementById('q').value = code;
+  search(code);
+}
+
   });
   return true;
 }
@@ -245,4 +261,3 @@ function startQuagga(){
   </script>
 </body>
 </html>
-

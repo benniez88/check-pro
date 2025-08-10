@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Product Lookup – CODE Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Fallback สำหรับสแกนบนเครื่องที่ไม่มี BarcodeDetector -->
+  <script defer src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+  <style>
+    .glass { background: rgba(255,255,255,0.65); backdrop-filter: blur(10px); }
+    .focus-ring:focus { outline: none; box-shadow: 0 0 0 4px rgba(37,99,235,0.25); }
+    .shine { position: relative; overflow: hidden; }
+    .shine::after { content: ""; position: absolute; top:0; left:-150%; width:50%; height:100%; transform: skewX(-20deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); animation: slide 2s ease-in-out infinite; }
+    @keyframes slide { 0% { left: -150%; } 60% { left: 200%; } 100% { left: 200%; } }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 text-slate-800">
+  <div class="max-w-xl mx-auto px-4 py-8">
+    <header class="mb-6">
+      <h1 class="text-2xl font-semibold tracking-tight">Product Lookup</h1>
+      <p class="text-sm text-slate-500">ค้นหาด้วยรหัสสินค้า (CODE)</p>
+    </header>
+
+    <div class="glass rounded-2xl p-4 shadow-lg border border-white/50">
+      <div class="flex gap-2">
+        <input id="q" type="text" inputmode="text" autocomplete="off" placeholder="พิมพ์/สแกน CODE แล้วกด Enter หรือปุ่มค้นหา"
+               class="w-full px-4 py-3 rounded-xl border border-slate-200 focus-ring text-base" />
+        <button id="scan" class="px-3 py-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[.98] transition" title="สแกนบาร์โค้ด">สแกน</button>
+        <button id="btn" class="px-4 py-3 rounded-xl bg-black text-white hover:opacity-90 active:scale-[.98] transition shine">ค้นหา</button>
+      </div>
+      <div class="mt-2 text-xs text-slate-500">รองรับ Handheld/Tablet, การยิงบาร์โค้ด และกล้อง (ต้องเปิดผ่าน HTTPS)</div>
+    </div>
+
+    <section id="result" class="mt-6"></section>
+
+    <section class="mt-6 grid gap-4">
+      <div class="glass rounded-2xl p-4 shadow border border-white/50">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold">รายการโปรด (Favorites)</h2>
+          <button id="clearFav" class="text-xs text-slate-500 underline">ล้างรายการโปรด</button>
+        </div>
+        <ul id="favList" class="mt-3 space-y-2 text-sm"></ul>
+      </div>
+      <div class="glass rounded-2xl p-4 shadow border border-white/50">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold">ประวัติการค้นหา</h2>
+          <button id="clearHist" class="text-xs text-slate-500 underline">ล้างประวัติ</button>
+        </div>
+        <ul id="histList" class="mt-3 space-y-2 text-sm"></ul>
+      </div>
+    </section>
+  </div>
+
+  <!-- Scan overlay -->
+  <div id="scanOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-4 relative">
+      <button id="closeScan" class="absolute right-3 top-3 text-slate-400">✕</button>
+      <div class="mb-2 text-sm text-slate-600">เล็งกล้องไปที่บาร์โค้ด</div>
+      <video id="video" autoplay playsinline class="w-full rounded-lg bg-black"></video>
+      <canvas id="canvas" class="hidden"></canvas>
+      <div class="text-xs text-slate-500 mt-2">ถ้ากล้องไม่รองรับ จะใช้ QuaggaJS อัตโนมัติ</div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbzBpyf1RHNqfkQ9-ejhT7GCv78VIJCLYCgRDBTtK8_JYlBSNxjKizDjWMxEQM9Le_Fj/exec"; // ใส่ Web app URL ที่ได้จาก Deploy
+
+    // ===== Local Storage Helpers =====
+    const LS_KEY_HIST = 'lookup_history_v1';
+    const LS_KEY_FAV  = 'lookup_favorites_v1';
+    const getHist = () => JSON.parse(localStorage.getItem(LS_KEY_HIST) || '[]');
+    const setHist = (a) => localStorage.setItem(LS_KEY_HIST, JSON.stringify(a.slice(0,50)));
+    const getFav  = () => JSON.parse(localStorage.getItem(LS_KEY_FAV) || '[]');
+    const setFav  = (a) => localStorage.setItem(LS_KEY_FAV, JSON.stringify(a));
+
+    function renderHist(){
+      const ul = document.getElementById('histList');
+      const hist = getHist();
+      ul.innerHTML = hist.map(code => `<li><button class="underline" onclick="quickSearch('${code}')">${code}</button></li>`).join('') || '<li class="text-slate-400">— ไม่มี —</li>';
+    }
+    function renderFav(){
+      const ul = document.getElementById('favList');
+      const fav = getFav();
+      ul.innerHTML = fav.map(code => `<li class="flex items-center justify-between"><button class="underline" onclick="quickSearch('${code}')">${code}</button><button class="text-xs text-red-600" onclick="toggleFav('${code}')">ลบ</button></li>`).join('') || '<li class="text-slate-400">— ไม่มี —</li>';
+    }
+
+    function addHist(code){
+      const hist = getHist();
+      const idx = hist.indexOf(code);
+      if (idx !== -1) hist.splice(idx,1);
+      hist.unshift(code);
+      setHist(hist);
+      renderHist();
+    }
+    function toggleFav(code){
+      const fav = getFav();
+      const idx = fav.indexOf(code);
+      if (idx === -1) fav.unshift(code); else fav.splice(idx,1);
+      setFav(fav);
+      renderFav();
+    }
+
+    // ===== UI Builders =====
+    function buildCard(d) {
+      const code = d.CODE || '';
+      const favActive = getFav().includes(code);
+      return `
+        <div class="glass rounded-2xl p-5 shadow-lg border border-white/50">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm text-slate-500">ผลการค้นหา</div>
+            <button class="text-sm ${favActive ? 'text-amber-600' : 'text-slate-500'}" onclick="toggleFav('${code}')">★ Favorite</button>
+          </div>
+          <div class="grid grid-cols-1 gap-3">
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${code}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${d.DESCRIPTION || ''}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div><div class="text-base">${d['PROMOTION(CF)'] || ''}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMO CODE</div><div class="text-base">${d['PROMO CODE'] || ''}</div></div>
+          </div>
+        </div>`;
+    }
+
+    function showLoading() {
+      document.getElementById('result').innerHTML = `
+        <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 animate-pulse">
+          <div class="h-4 bg-slate-200 rounded w-24 mb-4"></div>
+          <div class="space-y-3">
+            <div class="h-6 bg-slate-200 rounded"></div>
+            <div class="h-6 bg-slate-200 rounded"></div>
+            <div class="h-6 bg-slate-200 rounded"></div>
+            <div class="h-6 bg-slate-200 rounded"></div>
+          </div>
+        </div>`;
+    }
+
+    function showEmpty(msg='ไม่พบข้อมูล') { document.getElementById('result').innerHTML = `<div class="text-center text-slate-500">${msg}</div>`; }
+
+    async function search(q) {
+      const code = (q || '').trim();
+      if (!code) { showEmpty('กรุณาพิมพ์ CODE'); return; }
+      showLoading();
+      try {
+        const url = new URL(API_URL);
+        url.searchParams.set('q', code);
+        const res = await fetch(url.toString(), { cache: 'no-store' });
+        const json = await res.json();
+        if (json && json.data) {
+          document.getElementById('result').innerHTML = buildCard(json.data);
+          addHist(code);
+          renderFav();
+        } else {
+          showEmpty();
+        }
+      } catch (e) {
+        console.error(e); showEmpty('เกิดข้อผิดพลาดในการดึงข้อมูล');
+      }
+    }
+
+    window.quickSearch = (c) => { document.getElementById('q').value = c; search(c); };
+    window.toggleFav = (c) => { toggleFav(c); renderFav(); };
+
+    document.getElementById('btn').addEventListener('click', () => search(document.getElementById('q').value));
+    document.getElementById('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(e.target.value); });
+    document.getElementById('clearHist').addEventListener('click', () => { localStorage.removeItem(LS_KEY_HIST); renderHist(); });
+    document.getElementById('clearFav').addEventListener('click', () => { localStorage.removeItem(LS_KEY_FAV); renderFav(); });
+
+    // ===== Barcode Scan =====
+    const scanBtn = document.getElementById('scan');
+    const overlay = document.getElementById('scanOverlay');
+    const closeScan = document.getElementById('closeScan');
+    const video = document.getElementById('video');
+    let stream = null;
+    let quaggaStarted = false;
+
+    async function startNativeDetector(){
+      const BarcodeDetectorClass = window.BarcodeDetector;
+      if (!BarcodeDetectorClass) return false;
+      const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf'];
+      try {
+        const detector = new BarcodeDetectorClass({ formats });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        video.play();
+        const scan = async () => {
+          if (overlay.classList.contains('hidden')) return;
+          try {
+            const bitmap = await createImageBitmap(video);
+            const codes = await detector.detect(bitmap);
+            if (codes && codes.length) {
+              const code = codes[0].rawValue;
+              stopScan();
+              document.getElementById('q').value = code;
+              search(code);
+              return;
+            }
+          } catch (e) {}
+          requestAnimationFrame(scan);
+        };
+        requestAnimationFrame(scan);
+        return true;
+      } catch (e) { return false; }
+    }
+
+    function startQuagga(){
+      if (!window.Quagga) return false;
+      Quagga.init({
+        inputStream: { type: 'LiveStream', target: video, constraints: { facingMode: 'environment' } },
+        decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader'] }
+      }, function(err){
+        if (err) { console.error(err); return; }
+        Quagga.start();
+        quaggaStarted = true;
+      });
+      Quagga.onDetected(function(result){
+        const code = result.codeResult && result.codeResult.code;
+        if (code) {
+          stopScan();
+          document.getElementById('q').value = code;
+          search(code);
+        }
+      });
+      return true;
+    }
+
+    function stopScan(){
+      overlay.classList.add('hidden');
+      if (quaggaStarted && window.Quagga) { Quagga.stop(); quaggaStarted = false; }
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      video.srcObject = null;
+    }
+
+    document.getElementById('scan').addEventListener('click', async () => {
+      overlay.classList.remove('hidden');
+      const ok = await startNativeDetector();
+      if (!ok) startQuagga();
+    });
+    closeScan.addEventListener('click', stopScan);
+
+    // init lists
+    renderHist();
+    renderFav();
+  </script>
+</body>
+</html>

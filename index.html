@@ -107,28 +107,14 @@
     function escapeAttr(s) { return String(s).replace(/'/g, '&#39;'); }
 
     // ========= Core: ทำให้รองรับ Handheld/Keyboard Wedge =========
-    // ตัดรหัสตำแหน่งที่ 5–11 (1-based) สำหรับสตริงตัวเลขยาว หรือ QR
-    function normalizeCode(raw, fmt) {
-      const s = String(raw || '').trim();
-      if (!s) return '';
-      const f = (fmt || '').toLowerCase();
-
-      // ถ้าได้มาเป็น 7 หลักอยู่แล้ว ปล่อยผ่าน
-      if (/^\d{7}$/.test(s)) return s;
-
-      // ถ้าเป็น QR หรือเป็นตัวเลขรวดเดียว >= 12 หลัก → ใช้ 5..11
-      if (f.includes('qr') || /^\d{12,}$/.test(s)) {
-        return s.slice(4, 11); // 0-based index → 5..11 (รวม 7 หลัก)
-      }
-
-      // เผื่อกรณีเป็นตัวเลขล้วนและยาว >= 11
-      if (/^\d+$/.test(s) && s.length >= 11) {
-        return s.slice(4, 11);
-      }
-
-      // ไม่เข้าเงื่อนไข → คืนค่าตามเดิม
-      return s;
-    }
+  // ตัดจากซ้ายมือ "ตำแหน่งที่ 5 ถึง 11" (1-based) เสมอ ถ้าความยาว ≥ 11
+function normalizeCode(raw) {
+  const s = String(raw || '').trim();
+  if (s.length >= 11) {
+    return s.slice(4, 11); // index 4..10 => 7 ตัวอักษร (ตำแหน่ง 5..11 แบบ 1-based)
+  }
+  return s;
+}
 
     // เดิมเคยตัดเฉพาะ QR → ปรับให้เรียก normalizeCode เสมอ
     function getFinalCode(raw, format){
@@ -299,3 +285,4 @@
   </script>
 </body>
 </html>
+

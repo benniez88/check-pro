@@ -24,10 +24,12 @@
 
     <div class="glass rounded-2xl p-4 shadow-lg border border-white/50">
       <div class="flex gap-2">
-        <input id="q" type="text" inputmode="text" autocomplete="off" placeholder="พิมพ์/สแกน CODE แล้วกด Enter หรือปุ่มค้นหา"
+        <input id="q" type="text" inputmode="text" autocomplete="off"
+               placeholder="พิมพ์/สแกน CODE แล้วกด Enter หรือปุ่มค้นหา"
                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus-ring text-base" />
+        <button id="clear" class="px-3 py-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[.98] transition" title="ล้างค่า">ล้าง</button>
         <button id="scan" class="px-3 py-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[.98] transition" title="สแกนบาร์โค้ด">สแกน</button>
-        <button id="btn" class="px-4 py-3 rounded-xl bg-black text-white hover:opacity-90 active:scale-[.98] transition shine">ค้นหา</button>
+        <button id="btn"  class="px-4 py-3 rounded-xl bg-black text-white hover:opacity-90 active:scale-[.98] transition shine">ค้นหา</button>
       </div>
       <div class="mt-2 text-xs text-slate-500">รองรับ Handheld/Tablet, การยิงบาร์โค้ด และกล้อง (ต้องเปิดผ่าน HTTPS)</div>
     </div>
@@ -106,19 +108,14 @@
     }
     function escapeAttr(s) { return String(s).replace(/'/g, '&#39;'); }
 
-    // ========= Core: ทำให้รองรับ Handheld/Keyboard Wedge =========
-  // ตัดจากซ้ายมือ "ตำแหน่งที่ 5 ถึง 11" (1-based) เสมอ ถ้าความยาว ≥ 11
-function normalizeCode(raw) {
-  const s = String(raw || '').trim();
-  if (s.length >= 11) {
-    return s.slice(4, 11); // index 4..10 => 7 ตัวอักษร (ตำแหน่ง 5..11 แบบ 1-based)
-  }
-  return s;
-}
-
-    // เดิมเคยตัดเฉพาะ QR → ปรับให้เรียก normalizeCode เสมอ
-    function getFinalCode(raw, format){
-      return normalizeCode(raw, format);
+    // ====== ตัด "ตำแหน่งที่ 5–11 จากซ้าย" (1-based) แบบตายตัว ======
+    // ใช้ทุกจุด: ปุ่มค้นหา/Enter, BarcodeDetector, Quagga, keyboard wedge
+    function normalizeCode(raw) {
+      const s = String(raw || '').trim();
+      if (s.length >= 11) {
+        return s.slice(4, 11); // index 4..10 => 7 อักขระ (ตำแหน่ง 5..11)
+      }
+      return s;
     }
 
     // ===== UI Builders =====
@@ -157,7 +154,6 @@ function normalizeCode(raw) {
     }
 
     async function search(q) {
-      // ✅ บีบให้เข้ารูปแบบก่อนยิง API
       const code = normalizeCode(q);
       if (!code) { showEmpty('กรุณาพิมพ์ CODE'); return; }
       showLoading();
@@ -179,30 +175,46 @@ function normalizeCode(raw) {
       }
     }
 
-    window.quickSearch = (c) => { 
+    // ====== Input / Buttons ======
+    const qInput = document.getElementById('q');
+    const btnSearch = document.getElementById('btn');
+    const btnClear  = document.getElementById('clear');
+
+    function clearTextbox(focusBack=true, alsoResult=false){
+      qInput.value = '';
+      if (alsoResult) document.getElementById('result').innerHTML = '';
+      if (focusBack) qInput.focus();
+    }
+
+    window.quickSearch = (c) => {
+      clearTextbox(false);
       const norm = normalizeCode(c);
-      document.getElementById('q').value = norm; 
-      search(norm); 
+      qInput.value = norm;
+      // ถ้าเหลือ 7 หลักแล้ว ค้นหาให้เลย
+      if (/^.{7}$/.test(norm)) search(norm);
     };
 
-    const qInput = document.getElementById('q');
-    document.getElementById('btn').addEventListener('click', () => search(qInput.value));
+    btnSearch.addEventListener('click', () => search(qInput.value));
     qInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(e.target.value); });
+    btnClear.addEventListener('click', () => clearTextbox(true, false));
 
-    // ✅ รองรับเครื่องยิงเป็นคีย์บอร์ด: ตัดทันทีถ้าพิมพ์สตริงยาวเป็นตัวเลข
+    // รองรับเครื่องยิงเป็นคีย์บอร์ด (keyboard wedge): จะพิมพ์ยาวเข้ามาที่ช่อง #q
+    // เมื่อเห็นความยาว >= 11 ให้ตัดทันทีเป็น 5..11 แล้ว auto-search ถ้ายาว 7 ตัว
     qInput.addEventListener('input', () => {
       const raw = qInput.value || '';
-      if (/^\d{12,}$/.test(raw)) {
+      if (raw.length >= 11) {
         const norm = normalizeCode(raw);
         if (norm !== raw) {
           qInput.value = norm;
-          // ถ้าเหลือ 7 หลักแล้ว ค้นหาให้เลย
-          if (/^\d{7}$/.test(norm)) search(norm);
         }
+        if (norm.length === 7) search(norm);
       }
     });
 
-    document.getElementById('clearHist').addEventListener('click', () => { localStorage.removeItem(LS_KEY_HIST); renderHist(); });
+    document.getElementById('clearHist').addEventListener('click', () => {
+      localStorage.removeItem(LS_KEY_HIST);
+      renderHist();
+    });
 
     // ===== Barcode Scan (กล้อง/Quagga) =====
     const scanBtn = document.getElementById('scan');
@@ -217,25 +229,28 @@ function normalizeCode(raw) {
       if (!BarcodeDetectorClass) return false;
       const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf','qr_code'];
       try {
-        const detector = new BarcodeDetectorClass({ formats });
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
         video.play();
+
+        const detector = new BarcodeDetectorClass({ formats });
+
         const scan = async () => {
           if (overlay.classList.contains('hidden')) return;
           try {
             const bitmap = await createImageBitmap(video);
             const codes = await detector.detect(bitmap);
             if (codes && codes.length) {
-              const det = codes[0];
-              const raw = det && det.rawValue ? String(det.rawValue) : '';
-              const fmt = det && det.format ? String(det.format) : '';
-              const code = getFinalCode(raw, fmt);
+              const det  = codes[0];
+              const raw  = det && det.rawValue ? String(det.rawValue) : '';
+              // เคลียร์ช่องก่อนใส่ค่าใหม่ทุกครั้ง
+              clearTextbox(false);
+              const code = normalizeCode(raw);
               stopScan();
               qInput.value = code;
-              search(code);
+              if (code.length === 7) search(code);
             }
-          } catch (e) {}
+          } catch (e) {/* ignore frame errors */}
           requestAnimationFrame(scan);
         };
         requestAnimationFrame(scan);
@@ -254,13 +269,14 @@ function normalizeCode(raw) {
         quaggaStarted = true;
       });
       Quagga.onDetected(function(result){
-        const raw = result.codeResult && result.codeResult.code;
-        const fmt = (result.codeResult && (result.codeResult.format || result.codeResult.reader)) || '';
-        const code = getFinalCode(raw, fmt);
+        const raw = result?.codeResult?.code || '';
+        // เคลียร์ช่องก่อนใส่ค่าใหม่ทุกครั้ง
+        clearTextbox(false);
+        const code = normalizeCode(raw);
         if (code) {
           stopScan();
           qInput.value = code;
-          search(code);
+          if (code.length === 7) search(code);
         }
       });
       return true;
@@ -274,6 +290,8 @@ function normalizeCode(raw) {
     }
 
     scanBtn.addEventListener('click', async () => {
+      // เริ่มสแกนใหม่ → เคลียร์ช่องก่อน
+      clearTextbox(true, false);
       overlay.classList.remove('hidden');
       const ok = await startNativeDetector();
       if (!ok) startQuagga();
@@ -285,4 +303,3 @@ function normalizeCode(raw) {
   </script>
 </body>
 </html>
-

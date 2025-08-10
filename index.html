@@ -57,7 +57,7 @@
   </div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbzBpyf1RHNqfkQ9-ejhT7GCv78VIJCLYCgRDBTtK8_JYlBSNxjKizDjWMxEQM9Le_Fj/exec"; // ใส่ Web app URL ของคุณจาก Apps Script
+    const API_URL = "https://script.google.com/macros/s/AKfycbzBpyf1RHNqfkQ9-ejhT7GCv78VIJCLYCgRDBTtK8_JYlBSNxjKizDjWMxEQM9Le_Fj/exec";
 
     // ===== Percent Formatter =====
     function formatPercent(value) {
@@ -65,7 +65,7 @@
       let s = String(value).trim();
       const hasPercent = s.includes('%');
       const num = parseFloat(s.replace(/[^\d.\-]/g, ''));
-      if (Number.isNaN(num)) return s; // ถ้าอ่านเลขไม่ได้
+      if (Number.isNaN(num)) return s;
       let pct = hasPercent ? num : (num <= 1 ? num * 100 : num);
       const r = Math.round(pct * 100) / 100;
       return (Number.isInteger(r) ? r.toString() : r.toFixed(2)) + '%';
@@ -93,6 +93,46 @@
       hist.unshift(e);
       setHist(hist);
       renderHist();
+    }
+
+    // ===== Utilities =====
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) { return String(s).replace(/'/g, '&#39;'); }
+
+    // ========= Core: ทำให้รองรับ Handheld/Keyboard Wedge =========
+    // ตัดรหัสตำแหน่งที่ 5–11 (1-based) สำหรับสตริงตัวเลขยาว หรือ QR
+    function normalizeCode(raw, fmt) {
+      const s = String(raw || '').trim();
+      if (!s) return '';
+      const f = (fmt || '').toLowerCase();
+
+      // ถ้าได้มาเป็น 7 หลักอยู่แล้ว ปล่อยผ่าน
+      if (/^\d{7}$/.test(s)) return s;
+
+      // ถ้าเป็น QR หรือเป็นตัวเลขรวดเดียว >= 12 หลัก → ใช้ 5..11
+      if (f.includes('qr') || /^\d{12,}$/.test(s)) {
+        return s.slice(4, 11); // 0-based index → 5..11 (รวม 7 หลัก)
+      }
+
+      // เผื่อกรณีเป็นตัวเลขล้วนและยาว >= 11
+      if (/^\d+$/.test(s) && s.length >= 11) {
+        return s.slice(4, 11);
+      }
+
+      // ไม่เข้าเงื่อนไข → คืนค่าตามเดิม
+      return s;
+    }
+
+    // เดิมเคยตัดเฉพาะ QR → ปรับให้เรียก normalizeCode เสมอ
+    function getFinalCode(raw, format){
+      return normalizeCode(raw, format);
     }
 
     // ===== UI Builders =====
@@ -131,7 +171,8 @@
     }
 
     async function search(q) {
-      const code = (q || '').trim();
+      // ✅ บีบให้เข้ารูปแบบก่อนยิง API
+      const code = normalizeCode(q);
       if (!code) { showEmpty('กรุณาพิมพ์ CODE'); return; }
       showLoading();
       try {
@@ -152,96 +193,93 @@
       }
     }
 
-    // ===== Utilities =====
-    function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-    function escapeAttr(s) { return String(s).replace(/'/g, '&#39;'); }
+    window.quickSearch = (c) => { 
+      const norm = normalizeCode(c);
+      document.getElementById('q').value = norm; 
+      search(norm); 
+    };
 
-    window.quickSearch = (c) => { document.getElementById('q').value = c; search(c); };
+    const qInput = document.getElementById('q');
+    document.getElementById('btn').addEventListener('click', () => search(qInput.value));
+    qInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(e.target.value); });
 
-    document.getElementById('btn').addEventListener('click', () => search(document.getElementById('q').value));
-    document.getElementById('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(e.target.value); });
+    // ✅ รองรับเครื่องยิงเป็นคีย์บอร์ด: ตัดทันทีถ้าพิมพ์สตริงยาวเป็นตัวเลข
+    qInput.addEventListener('input', () => {
+      const raw = qInput.value || '';
+      if (/^\d{12,}$/.test(raw)) {
+        const norm = normalizeCode(raw);
+        if (norm !== raw) {
+          qInput.value = norm;
+          // ถ้าเหลือ 7 หลักแล้ว ค้นหาให้เลย
+          if (/^\d{7}$/.test(norm)) search(norm);
+        }
+      }
+    });
+
     document.getElementById('clearHist').addEventListener('click', () => { localStorage.removeItem(LS_KEY_HIST); renderHist(); });
 
-    // ===== Barcode Scan =====
+    // ===== Barcode Scan (กล้อง/Quagga) =====
     const scanBtn = document.getElementById('scan');
     const overlay = document.getElementById('scanOverlay');
     const closeScan = document.getElementById('closeScan');
     const video = document.getElementById('video');
     let stream = null;
     let quaggaStarted = false;
-	function getFinalCode(raw, format){
-  // ถ้าเป็น QR (format = 'qr_code', 'qr_reader' ฯลฯ) ให้ตัดเฉพาะตำแหน่ง 5–11 (1-based)
-  const fmt = (format || '').toLowerCase();
-  const isQR = fmt.includes('qr');
-  const s = String(raw || '');
-  if (isQR && s.length >= 11) {
-    return s.slice(4, 11); // 0-based slice → ตำแหน่ง 5..11 แบบ inclusive
-  }
-  return s;
-}
 
     async function startNativeDetector(){
-  const BarcodeDetectorClass = window.BarcodeDetector;
-  if (!BarcodeDetectorClass) return false;
-  const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf','qr_code']; // เพิ่ม qr_code
-  try {
-    const detector = new BarcodeDetectorClass({ formats });
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = stream;
-    video.play();
-    const scan = async () => {
-      if (overlay.classList.contains('hidden')) return;
+      const BarcodeDetectorClass = window.BarcodeDetector;
+      if (!BarcodeDetectorClass) return false;
+      const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf','qr_code'];
       try {
-        const bitmap = await createImageBitmap(video);
-        const codes = await detector.detect(bitmap);
-        if (codes && codes.length) {
-        const det = codes[0];
-const raw = det && det.rawValue ? String(det.rawValue) : '';
-const fmt = det && det.format ? String(det.format) : '';
-const code = getFinalCode(raw, fmt);
-stopScan();
-document.getElementById('q').value = code;
-search(code);
+        const detector = new BarcodeDetectorClass({ formats });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        video.play();
+        const scan = async () => {
+          if (overlay.classList.contains('hidden')) return;
+          try {
+            const bitmap = await createImageBitmap(video);
+            const codes = await detector.detect(bitmap);
+            if (codes && codes.length) {
+              const det = codes[0];
+              const raw = det && det.rawValue ? String(det.rawValue) : '';
+              const fmt = det && det.format ? String(det.format) : '';
+              const code = getFinalCode(raw, fmt);
+              stopScan();
+              qInput.value = code;
+              search(code);
+            }
+          } catch (e) {}
+          requestAnimationFrame(scan);
+        };
+        requestAnimationFrame(scan);
+        return true;
+      } catch (e) { return false; }
+    }
 
+    function startQuagga(){
+      if (!window.Quagga) return false;
+      Quagga.init({
+        inputStream: { type: 'LiveStream', target: video, constraints: { facingMode: 'environment' } },
+        decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader','qr_reader'] }
+      }, function(err){
+        if (err) { console.error(err); return; }
+        Quagga.start();
+        quaggaStarted = true;
+      });
+      Quagga.onDetected(function(result){
+        const raw = result.codeResult && result.codeResult.code;
+        const fmt = (result.codeResult && (result.codeResult.format || result.codeResult.reader)) || '';
+        const code = getFinalCode(raw, fmt);
+        if (code) {
+          stopScan();
+          qInput.value = code;
+          search(code);
         }
-      } catch (e) {}
-      requestAnimationFrame(scan);
-    };
-    requestAnimationFrame(scan);
-    return true;
-  } catch (e) { return false; }
-}
+      });
+      return true;
+    }
 
-function startQuagga(){
-  if (!window.Quagga) return false;
-  Quagga.init({
-    inputStream: { type: 'LiveStream', target: video, constraints: { facingMode: 'environment' } },
-    decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader','qr_reader'] } // เพิ่ม qr_reader
-  }, function(err){
-    if (err) { console.error(err); return; }
-    Quagga.start();
-    quaggaStarted = true;
-  });
-  Quagga.onDetected(function(result){
-    const raw = result.codeResult && result.codeResult.code;
-const fmt = (result.codeResult && (result.codeResult.format || result.codeResult.reader)) || '';
-const code = getFinalCode(raw, fmt);
-if (code) {
-  stopScan();
-  document.getElementById('q').value = code;
-  search(code);
-}
-
-  });
-  return true;
-}
     function stopScan(){
       overlay.classList.add('hidden');
       if (quaggaStarted && window.Quagga) { Quagga.stop(); quaggaStarted = false; }

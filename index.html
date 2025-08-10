@@ -61,6 +61,24 @@
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbzBpyf1RHNqfkQ9-ejhT7GCv78VIJCLYCgRDBTtK8_JYlBSNxjKizDjWMxEQM9Le_Fj/exec";
 
+    // ===== Utils =====
+    function digitsOnly(s){ return String(s ?? '').replace(/\D+/g,''); }
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s){ return String(s).replace(/'/g,'&#39;'); }
+
+    // ===== ตัด "ตำแหน่งที่ 5–11 จากซ้าย" (1-based) แบบตายตัว =====
+    // 1) เก็บเฉพาะตัวเลข  2) ถ้ายาว >= 11 ให้คืน s[4..10]  (รวม 7 หลัก)
+    function normalizeCode(raw) {
+      const s = digitsOnly(raw).trim();
+      if (s.length >= 11) return s.slice(4, 11);
+      return s;
+    }
+
     // ===== Percent Formatter =====
     function formatPercent(value) {
       if (value == null || value === '') return '';
@@ -85,7 +103,6 @@
         `<li><button class="underline" onclick="quickSearch('${escapeAttr(code)}')">${escapeHtml(code)}${description ? ' — ' + escapeHtml(description) : ''}</button></li>`
       ).join('') || '<li class="text-slate-400">— ไม่มี —</li>';
     }
-
     function addHist(entry){
       const e = { code: entry.code || '', description: entry.description || '' };
       if (!e.code) return;
@@ -97,34 +114,12 @@
       renderHist();
     }
 
-    // ===== Utilities =====
-    function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-    function escapeAttr(s) { return String(s).replace(/'/g, '&#39;'); }
-
-    // ====== ตัด "ตำแหน่งที่ 5–11 จากซ้าย" (1-based) แบบตายตัว ======
-    // ใช้ทุกจุด: ปุ่มค้นหา/Enter, BarcodeDetector, Quagga, keyboard wedge
-    function normalizeCode(raw) {
-      const s = String(raw || '').trim();
-      if (s.length >= 11) {
-        return s.slice(4, 11); // index 4..10 => 7 อักขระ (ตำแหน่ง 5..11)
-      }
-      return s;
-    }
-
     // ===== UI Builders =====
     function buildCard(d) {
       const code = d.CODE || '';
       const desc = d.DESCRIPTION || '';
       const promo = formatPercent(d['PROMOTION(CF)']);
       const promoCode = d['PROMO CODE'] || '';
-
       return `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50">
           <div class="grid grid-cols-1 gap-3">
@@ -135,7 +130,6 @@
           </div>
         </div>`;
     }
-
     function showLoading() {
       document.getElementById('result').innerHTML = `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 animate-pulse">
@@ -148,7 +142,6 @@
           </div>
         </div>`;
     }
-
     function showEmpty(msg='ไม่พบข้อมูล หรือ CODE นี้ไม่ร่วม PRO Clearance') {
       document.getElementById('result').innerHTML = `<div class="text-center text-slate-500">${msg}</div>`;
     }
@@ -175,7 +168,7 @@
       }
     }
 
-    // ====== Input / Buttons ======
+    // ===== Elements & helpers =====
     const qInput = document.getElementById('q');
     const btnSearch = document.getElementById('btn');
     const btnClear  = document.getElementById('clear');
@@ -188,26 +181,33 @@
 
     window.quickSearch = (c) => {
       clearTextbox(false);
-      const norm = normalizeCode(c);
-      qInput.value = norm;
-      // ถ้าเหลือ 7 หลักแล้ว ค้นหาให้เลย
-      if (/^.{7}$/.test(norm)) search(norm);
+      const code = normalizeCode(c);
+      qInput.value = code;
+      if (code.length === 7) search(code);
     };
 
     btnSearch.addEventListener('click', () => search(qInput.value));
-    qInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(e.target.value); });
     btnClear.addEventListener('click', () => clearTextbox(true, false));
 
-    // รองรับเครื่องยิงเป็นคีย์บอร์ด (keyboard wedge): จะพิมพ์ยาวเข้ามาที่ช่อง #q
-    // เมื่อเห็นความยาว >= 11 ให้ตัดทันทีเป็น 5..11 แล้ว auto-search ถ้ายาว 7 ตัว
+    // ----- Keyboard wedge handling (debounced) -----
+    let scanTimer = null;
+    const SCAN_IDLE_MS = 120; // รอให้เครื่องพิมพ์จบก่อนค่อยตัด
     qInput.addEventListener('input', () => {
-      const raw = qInput.value || '';
-      if (raw.length >= 11) {
-        const norm = normalizeCode(raw);
-        if (norm !== raw) {
-          qInput.value = norm;
-        }
-        if (norm.length === 7) search(norm);
+      if (scanTimer) clearTimeout(scanTimer);
+      scanTimer = setTimeout(() => {
+        const code = normalizeCode(qInput.value);
+        // ใส่ค่าใหม่ที่ถูกตัด แล้วค้นหาอัตโนมัติถ้าเป็น 7 หลัก
+        qInput.value = code;
+        if (code.length === 7) search(code);
+      }, SCAN_IDLE_MS);
+    });
+    // รองรับเครื่องที่ยิงแล้วส่ง Enter ต่อท้าย
+    qInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const code = normalizeCode(qInput.value);
+        qInput.value = code;
+        search(code);
       }
     });
 
@@ -232,7 +232,6 @@
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
         video.play();
-
         const detector = new BarcodeDetectorClass({ formats });
 
         const scan = async () => {
@@ -241,21 +240,19 @@
             const bitmap = await createImageBitmap(video);
             const codes = await detector.detect(bitmap);
             if (codes && codes.length) {
-              const det  = codes[0];
-              const raw  = det && det.rawValue ? String(det.rawValue) : '';
-              // เคลียร์ช่องก่อนใส่ค่าใหม่ทุกครั้ง
+              const raw = codes[0]?.rawValue ?? '';
               clearTextbox(false);
               const code = normalizeCode(raw);
               stopScan();
               qInput.value = code;
               if (code.length === 7) search(code);
             }
-          } catch (e) {/* ignore frame errors */}
+          } catch (e) {/* ignore transient frame errors */}
           requestAnimationFrame(scan);
         };
         requestAnimationFrame(scan);
         return true;
-      } catch (e) { return false; }
+      } catch { return false; }
     }
 
     function startQuagga(){
@@ -269,8 +266,7 @@
         quaggaStarted = true;
       });
       Quagga.onDetected(function(result){
-        const raw = result?.codeResult?.code || '';
-        // เคลียร์ช่องก่อนใส่ค่าใหม่ทุกครั้ง
+        const raw = result?.codeResult?.code ?? '';
         clearTextbox(false);
         const code = normalizeCode(raw);
         if (code) {
@@ -290,8 +286,7 @@
     }
 
     scanBtn.addEventListener('click', async () => {
-      // เริ่มสแกนใหม่ → เคลียร์ช่องก่อน
-      clearTextbox(true, false);
+      clearTextbox(true, false); // เริ่มสแกนใหม่ → เคลียร์ช่องก่อน
       overlay.classList.remove('hidden');
       const ok = await startNativeDetector();
       if (!ok) startQuagga();
@@ -303,4 +298,3 @@
   </script>
 </body>
 </html>
-

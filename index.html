@@ -37,13 +37,6 @@
     <section class="mt-6 grid gap-4">
       <div class="glass rounded-2xl p-4 shadow border border-white/50">
         <div class="flex items-center justify-between">
-          <h2 class="font-semibold">รายการโปรด (Favorites)</h2>
-          <button id="clearFav" class="text-xs text-slate-500 underline">ล้างรายการโปรด</button>
-        </div>
-        <ul id="favList" class="mt-3 space-y-2 text-sm"></ul>
-      </div>
-      <div class="glass rounded-2xl p-4 shadow border border-white/50">
-        <div class="flex items-center justify-between">
           <h2 class="font-semibold">ประวัติการค้นหา</h2>
           <button id="clearHist" class="text-xs text-slate-500 underline">ล้างประวัติ</button>
         </div>
@@ -64,58 +57,58 @@
   </div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbzBpyf1RHNqfkQ9-ejhT7GCv78VIJCLYCgRDBTtK8_JYlBSNxjKizDjWMxEQM9Le_Fj/exec"; // ใส่ Web app URL ที่ได้จาก Deploy
+    const API_URL = "https://script.google.com/macros/s/AKfycbzBpyf1RHNqfkQ9-ejhT7GCv78VIJCLYCgRDBTtK8_JYlBSNxjKizDjWMxEQM9Le_Fj/exec"; // ใส่ Web app URL ของคุณจาก Apps Script
 
-    // ===== Local Storage Helpers =====
-    const LS_KEY_HIST = 'lookup_history_v1';
-    const LS_KEY_FAV  = 'lookup_favorites_v1';
+    // ===== Percent Formatter =====
+    function formatPercent(value) {
+      if (value == null || value === '') return '';
+      let s = String(value).trim();
+      const hasPercent = s.includes('%');
+      const num = parseFloat(s.replace(/[^\d.\-]/g, ''));
+      if (Number.isNaN(num)) return s; // ถ้าอ่านเลขไม่ได้
+      let pct = hasPercent ? num : (num <= 1 ? num * 100 : num);
+      const r = Math.round(pct * 100) / 100;
+      return (Number.isInteger(r) ? r.toString() : r.toFixed(2)) + '%';
+    }
+
+    // ===== Local Storage (History: CODE + DESCRIPTION) =====
+    const LS_KEY_HIST = 'lookup_history_v2';
     const getHist = () => JSON.parse(localStorage.getItem(LS_KEY_HIST) || '[]');
-    const setHist = (a) => localStorage.setItem(LS_KEY_HIST, JSON.stringify(a.slice(0,50)));
-    const getFav  = () => JSON.parse(localStorage.getItem(LS_KEY_FAV) || '[]');
-    const setFav  = (a) => localStorage.setItem(LS_KEY_FAV, JSON.stringify(a));
+    const setHist = (arr) => localStorage.setItem(LS_KEY_HIST, JSON.stringify(arr.slice(0,50)));
 
     function renderHist(){
       const ul = document.getElementById('histList');
       const hist = getHist();
-      ul.innerHTML = hist.map(code => `<li><button class="underline" onclick="quickSearch('${code}')">${code}</button></li>`).join('') || '<li class="text-slate-400">— ไม่มี —</li>';
-    }
-    function renderFav(){
-      const ul = document.getElementById('favList');
-      const fav = getFav();
-      ul.innerHTML = fav.map(code => `<li class="flex items-center justify-between"><button class="underline" onclick="quickSearch('${code}')">${code}</button><button class="text-xs text-red-600" onclick="toggleFav('${code}')">ลบ</button></li>`).join('') || '<li class="text-slate-400">— ไม่มี —</li>';
+      ul.innerHTML = hist.map(({code, description}) =>
+        `<li><button class="underline" onclick="quickSearch('${escapeAttr(code)}')">${escapeHtml(code)}${description ? ' — ' + escapeHtml(description) : ''}</button></li>`
+      ).join('') || '<li class="text-slate-400">— ไม่มี —</li>';
     }
 
-    function addHist(code){
+    function addHist(entry){
+      const e = { code: entry.code || '', description: entry.description || '' };
+      if (!e.code) return;
       const hist = getHist();
-      const idx = hist.indexOf(code);
+      const idx = hist.findIndex(x => (x.code || '').toLowerCase() === e.code.toLowerCase());
       if (idx !== -1) hist.splice(idx,1);
-      hist.unshift(code);
+      hist.unshift(e);
       setHist(hist);
       renderHist();
-    }
-    function toggleFav(code){
-      const fav = getFav();
-      const idx = fav.indexOf(code);
-      if (idx === -1) fav.unshift(code); else fav.splice(idx,1);
-      setFav(fav);
-      renderFav();
     }
 
     // ===== UI Builders =====
     function buildCard(d) {
       const code = d.CODE || '';
-      const favActive = getFav().includes(code);
+      const desc = d.DESCRIPTION || '';
+      const promo = formatPercent(d['PROMOTION(CF)']);
+      const promoCode = d['PROMO CODE'] || '';
+
       return `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50">
-          <div class="flex items-center justify-between mb-3">
-            <div class="text-sm text-slate-500">ผลการค้นหา</div>
-            <button class="text-sm ${favActive ? 'text-amber-600' : 'text-slate-500'}" onclick="toggleFav('${code}')">★ Favorite</button>
-          </div>
           <div class="grid grid-cols-1 gap-3">
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${code}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${d.DESCRIPTION || ''}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div><div class="text-base">${d['PROMOTION(CF)'] || ''}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMO CODE</div><div class="text-base">${d['PROMO CODE'] || ''}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${escapeHtml(code)}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${escapeHtml(desc)}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div><div class="text-base">${escapeHtml(promo)}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMO CODE</div><div class="text-base">${escapeHtml(promoCode)}</div></div>
           </div>
         </div>`;
     }
@@ -133,7 +126,9 @@
         </div>`;
     }
 
-    function showEmpty(msg='ไม่พบข้อมูล') { document.getElementById('result').innerHTML = `<div class="text-center text-slate-500">${msg}</div>`; }
+    function showEmpty(msg='ไม่พบข้อมูล') {
+      document.getElementById('result').innerHTML = `<div class="text-center text-slate-500">${msg}</div>`;
+    }
 
     async function search(q) {
       const code = (q || '').trim();
@@ -145,24 +140,34 @@
         const res = await fetch(url.toString(), { cache: 'no-store' });
         const json = await res.json();
         if (json && json.data) {
-          document.getElementById('result').innerHTML = buildCard(json.data);
-          addHist(code);
-          renderFav();
+          const d = json.data;
+          document.getElementById('result').innerHTML = buildCard(d);
+          addHist({ code: d.CODE || '', description: d.DESCRIPTION || '' });
         } else {
           showEmpty();
         }
       } catch (e) {
-        console.error(e); showEmpty('เกิดข้อผิดพลาดในการดึงข้อมูล');
+        console.error(e);
+        showEmpty('เกิดข้อผิดพลาดในการดึงข้อมูล');
       }
     }
 
+    // ===== Utilities =====
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) { return String(s).replace(/'/g, '&#39;'); }
+
     window.quickSearch = (c) => { document.getElementById('q').value = c; search(c); };
-    window.toggleFav = (c) => { toggleFav(c); renderFav(); };
 
     document.getElementById('btn').addEventListener('click', () => search(document.getElementById('q').value));
     document.getElementById('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(e.target.value); });
     document.getElementById('clearHist').addEventListener('click', () => { localStorage.removeItem(LS_KEY_HIST); renderHist(); });
-    document.getElementById('clearFav').addEventListener('click', () => { localStorage.removeItem(LS_KEY_FAV); renderFav(); });
 
     // ===== Barcode Scan =====
     const scanBtn = document.getElementById('scan');
@@ -173,55 +178,54 @@
     let quaggaStarted = false;
 
     async function startNativeDetector(){
-      const BarcodeDetectorClass = window.BarcodeDetector;
-      if (!BarcodeDetectorClass) return false;
-      const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf'];
+  const BarcodeDetectorClass = window.BarcodeDetector;
+  if (!BarcodeDetectorClass) return false;
+  const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf','qr_code']; // เพิ่ม qr_code
+  try {
+    const detector = new BarcodeDetectorClass({ formats });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    video.play();
+    const scan = async () => {
+      if (overlay.classList.contains('hidden')) return;
       try {
-        const detector = new BarcodeDetectorClass({ formats });
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        video.srcObject = stream;
-        video.play();
-        const scan = async () => {
-          if (overlay.classList.contains('hidden')) return;
-          try {
-            const bitmap = await createImageBitmap(video);
-            const codes = await detector.detect(bitmap);
-            if (codes && codes.length) {
-              const code = codes[0].rawValue;
-              stopScan();
-              document.getElementById('q').value = code;
-              search(code);
-              return;
-            }
-          } catch (e) {}
-          requestAnimationFrame(scan);
-        };
-        requestAnimationFrame(scan);
-        return true;
-      } catch (e) { return false; }
-    }
-
-    function startQuagga(){
-      if (!window.Quagga) return false;
-      Quagga.init({
-        inputStream: { type: 'LiveStream', target: video, constraints: { facingMode: 'environment' } },
-        decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader'] }
-      }, function(err){
-        if (err) { console.error(err); return; }
-        Quagga.start();
-        quaggaStarted = true;
-      });
-      Quagga.onDetected(function(result){
-        const code = result.codeResult && result.codeResult.code;
-        if (code) {
+        const bitmap = await createImageBitmap(video);
+        const codes = await detector.detect(bitmap);
+        if (codes && codes.length) {
+          const code = codes[0].rawValue;
           stopScan();
           document.getElementById('q').value = code;
           search(code);
+          return;
         }
-      });
-      return true;
-    }
+      } catch (e) {}
+      requestAnimationFrame(scan);
+    };
+    requestAnimationFrame(scan);
+    return true;
+  } catch (e) { return false; }
+}
 
+function startQuagga(){
+  if (!window.Quagga) return false;
+  Quagga.init({
+    inputStream: { type: 'LiveStream', target: video, constraints: { facingMode: 'environment' } },
+    decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader','qr_reader'] } // เพิ่ม qr_reader
+  }, function(err){
+    if (err) { console.error(err); return; }
+    Quagga.start();
+    quaggaStarted = true;
+  });
+  Quagga.onDetected(function(result){
+    const code = result.codeResult && result.codeResult.code;
+    if (code) {
+      stopScan();
+      document.getElementById('q').value = code;
+      search(code);
+    }
+  });
+  return true;
+}
     function stopScan(){
       overlay.classList.add('hidden');
       if (quaggaStarted && window.Quagga) { Quagga.stop(); quaggaStarted = false; }
@@ -229,16 +233,15 @@
       video.srcObject = null;
     }
 
-    document.getElementById('scan').addEventListener('click', async () => {
+    scanBtn.addEventListener('click', async () => {
       overlay.classList.remove('hidden');
       const ok = await startNativeDetector();
       if (!ok) startQuagga();
     });
     closeScan.addEventListener('click', stopScan);
 
-    // init lists
+    // init
     renderHist();
-    renderFav();
   </script>
 </body>
 </html>

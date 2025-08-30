@@ -120,9 +120,11 @@
     function buildCard(d) {
       const code = d.CODE || '';
       const desc = d.DESCRIPTION || '';
-      const cate = d['CATE CODE'] || '';
+      const cate = d.CATEGORY || '';
       const promo = formatPercent(d['PROMOTION(CF)']);
       const promoCode = d['PROMO CODE'] || '';
+      const originalPrice = formatPrice(d.ORIGINAL_PRICE); // เพิ่ม ราคาก่อนลด
+      const discountedPrice = calculateDiscountedPrice(d.ORIGINAL_PRICE, d['PROMOTION(CF)']);
       return `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50">
           <div class="grid grid-cols-1 gap-3">
@@ -131,6 +133,13 @@
              <div><div class="text-xs uppercase tracking-wide text-slate-500">CATE</div><div class="text-base">${escapeHtml(cate)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div><div class="text-base">${escapeHtml(promo)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMO CODE</div><div class="text-base">${escapeHtml(promoCode)}</div></div>
+            <div class="mt-4">
+              <div class="text-xs uppercase tracking-wide text-slate-500">PRICE</div>
+              <div class="flex items-end gap-2">
+                ${originalPrice ? `<div class="text-lg text-slate-400 line-through">${originalPrice}</div>` : ''}
+                ${discountedPrice !== null ? `<div class="text-2xl font-bold text-red-600">${formatPrice(discountedPrice)} บาท</div>` : ''}
+              </div>
+            </div>
           </div>
         </div>`;
     }
@@ -366,4 +375,5 @@
   </script>
 </body>
 </html>
+
 

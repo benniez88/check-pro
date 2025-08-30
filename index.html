@@ -123,33 +123,22 @@
       const cate = d.CATEGORY || '';
       const promo = formatPercent(d['PROMOTION(CF)']);
       const promoCode = d['PROMO CODE'] || '';
-      const originalPrice = formatPrice(d.ORIGINAL_PRICE); // เพิ่ม ราคาก่อนลด
-      const discountedPrice = calculateDiscountedPrice(d.ORIGINAL_PRICE, d['PROMOTION(CF)']);
       return `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50">
           <div class="grid grid-cols-1 gap-3">
             <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${escapeHtml(code)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${escapeHtml(desc)}</div></div>
-             <div><div class="text-xs uppercase tracking-wide text-slate-500">CATE</div><div class="text-base">${escapeHtml(cate)}</div></div>
+            <div><div class="text-xs uppercase tracking-wide text-slate-500">CATEGORY</div><div class="text-base">${escapeHtml(cate)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div><div class="text-base">${escapeHtml(promo)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMO CODE</div><div class="text-base">${escapeHtml(promoCode)}</div></div>
-            <div class="mt-4">
-              <div class="text-xs uppercase tracking-wide text-slate-500">PRICE</div>
-              <div class="flex items-end gap-2">
-                ${originalPrice ? `<div class="text-lg text-slate-400 line-through">${originalPrice}</div>` : ''}
-                ${discountedPrice !== null ? `<div class="text-2xl font-bold text-red-600">${formatPrice(discountedPrice)} บาท</div>` : ''}
-              </div>
-            </div>
           </div>
         </div>`;
     }
-    // โค้ดส่วนอื่นๆ ...
     function showLoading(){
       document.getElementById('result').innerHTML = `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 animate-pulse">
           <div class="h-4 bg-slate-200 rounded w-24 mb-4"></div>
           <div class="space-y-3">
-            <div class="h-6 bg-slate-200 rounded"></div>
             <div class="h-6 bg-slate-200 rounded"></div>
             <div class="h-6 bg-slate-200 rounded"></div>
             <div class="h-6 bg-slate-200 rounded"></div>
@@ -377,6 +366,3 @@
   </script>
 </body>
 </html>
-
-
-

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Product Lookup – CODE Search</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     .glass { background: rgba(255,255,255,0.65); backdrop-filter: blur(10px); }
     .focus-ring:focus { outline: none; box-shadow: 0 0 0 4px rgba(37,99,235,0.25); }
@@ -19,7 +21,6 @@
       <h1 class="text-2xl font-semibold tracking-tight">Product Lookup</h1>
       <p class="text-sm text-slate-500">ค้นหาด้วยรหัสสินค้า (CODE)</p>
     </header>
-
     <div class="glass rounded-2xl p-4 shadow-lg border border-white/50">
       <div class="flex gap-2">
         <input id="q" type="text" inputmode="text" autocomplete="off"
@@ -36,9 +37,7 @@
         รองรับ Handheld/Tablet, การยิงบาร์โค้ด และกล้อง (ต้องเปิดผ่าน HTTPS และใน Safari โดยตรง ไม่ใช่ in-app browser)
       </div>
     </div>
-
     <section id="result" class="mt-6"></section>
-
     <section class="mt-6 grid gap-4">
       <div class="glass rounded-2xl p-4 shadow border border-white/50">
         <div class="flex items-center justify-between">
@@ -49,7 +48,6 @@
       </div>
     </section>
   </div>
-
   <div id="scanOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl w-full max-w-md p-4 relative">
       <button id="closeScan" class="absolute right-3 top-3 text-slate-400">✕</button>
@@ -59,7 +57,6 @@
       <div class="text-xs text-slate-500 mt-2">ถ้าอุปกรณ์ไม่รองรับ จะใช้ jsQR/Quagga ให้อัตโนมัติ</div>
     </div>
   </div>
-
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbwrKgKw0JFqwQX4-0sL90paBc4BLDPOiQyyWEUOx9MTetLfiUlabG1y6igSa-91RD-L/exec";
 
@@ -123,8 +120,8 @@
     function buildCard(d) {
       const code = d.CODE || '';
       const desc = d.DESCRIPTION || '';
-      const cate = d.CATEGORY || ''; // เพิ่ม CATE
-      const originalPrice = formatPrice(d.ORIGINAL_PRICE); // เพิ่ม ราคาก่อนลด
+      const cate = d.CATEGORY || '';
+      const originalPrice = formatPrice(d.ORIGINAL_PRICE);
       const promo = formatPercent(d['PROMOTION(CF)']);
       const promoCode = d['PROMO CODE'] || '';
       const discountedPrice = calculateDiscountedPrice(d.ORIGINAL_PRICE, d['PROMOTION(CF)']);
@@ -153,7 +150,6 @@
         </div>`;
     }
     
-    // โค้ดส่วนอื่นๆ ...
     function showLoading(){
       document.getElementById('result').innerHTML = `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 animate-pulse">
@@ -192,8 +188,185 @@
         showEmpty('เกิดข้อผิดพลาดในการดึงข้อมูล');
       }
     }
+    
+    // ===== Elements & helpers =====
+    const qInput   = document.getElementById('q');
+    const btnSearch= document.getElementById('btn');
+    const btnClear = document.getElementById('clear');
 
-    // โค้ดส่วนอื่นๆ ...
+    function clearTextbox(focusBack=true, alsoResult=false){
+      qInput.value = '';
+      if (alsoResult) document.getElementById('result').innerHTML = '';
+      if (focusBack) qInput.focus();
+    }
+
+    window.quickSearch = (c) => {
+      clearTextbox(false);
+      const code = normalizeCode(c);
+      qInput.value = code;
+      if (code.length === 7) search(code);
+    };
+
+    btnSearch.addEventListener('click', () => search(qInput.value));
+    btnClear.addEventListener('click', () => clearTextbox(true, false));
+
+    // keyboard wedge (debounced)
+    let scanTimer = null;
+    const SCAN_IDLE_MS = 120;
+    qInput.addEventListener('input', () => {
+      if (scanTimer) clearTimeout(scanTimer);
+      scanTimer = setTimeout(() => {
+        const code = normalizeCode(qInput.value);
+        qInput.value = code;
+        if (code.length === 7) search(code);
+      }, SCAN_IDLE_MS);
+    });
+    qInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const code = normalizeCode(qInput.value);
+        qInput.value = code;
+        search(code);
+      }
+    });
+
+    document.getElementById('clearHist').addEventListener('click', () => {
+      localStorage.removeItem(LS_KEY_HIST);
+      renderHist();
+    });
+
+    // ===== Scanner (iPhone-safe) =====
+    const scanBtn   = document.getElementById('scan');
+    const overlay   = document.getElementById('scanOverlay');
+    const closeScan = document.getElementById('closeScan');
+    const video     = document.getElementById('video');
+    const canvas    = document.getElementById('canvas');
+    const ctx       = canvas.getContext('2d', { willReadFrequently: true });
+
+    let stream = null;
+    let quaggaStarted = false;
+    let jsqrActive = false;
+
+    function onDetectedRaw(raw){
+      clearTextbox(false);
+      const code = normalizeCode(raw);
+      stopScan();
+      qInput.value = code;
+      if (code.length === 7) search(code);
+    }
+
+    async function startNativeDetector(){
+      const BarcodeDetectorClass = window.BarcodeDetector;
+      if (!BarcodeDetectorClass) return false;
+      const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf','qr_code'];
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: 'environment' } }
+        });
+        video.srcObject = stream;
+        video.muted = true;
+        await video.play();
+
+        const detector = new BarcodeDetectorClass({ formats });
+        const scan = async () => {
+          if (overlay.classList.contains('hidden')) return;
+
+          try {
+            let codes = [];
+            if ('createImageBitmap' in window) {
+              const bmp = await createImageBitmap(video);
+              codes = await detector.detect(bmp);
+            } else {
+              const w = video.videoWidth, h = video.videoHeight;
+              if (w && h) {
+                canvas.width = w; canvas.height = h;
+                ctx.drawImage(video, 0, 0, w, h);
+                codes = await detector.detect(canvas);
+              }
+            }
+            if (codes && codes.length) {
+              const raw = codes[0]?.rawValue || '';
+              if (raw) return onDetectedRaw(raw);
+            }
+          } catch(e){ /* ignore frame errors */ }
+          requestAnimationFrame(scan);
+        };
+        requestAnimationFrame(scan);
+        return true;
+      } catch(e){
+        console.warn('Native detector failed:', e);
+        return false;
+      }
+    }
+
+    async function startJsQR(){
+      if (typeof jsQR === 'undefined') return false;
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: 'environment' } }
+        });
+        video.srcObject = stream;
+        video.muted = true;
+        await video.play();
+        jsqrActive = true;
+        const scan = () => {
+          if (!jsqrActive || overlay.classList.contains('hidden')) return;
+          const w = video.videoWidth, h = video.videoHeight;
+          if (!w || !h) { requestAnimationFrame(scan); return; }
+          canvas.width = w; canvas.height = h;
+          ctx.drawImage(video, 0, 0, w, h);
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const result = jsQR(imageData.data, w, h, { inversionAttempts: "dontInvert" });
+          if (result && result.data) {
+            onDetectedRaw(result.data);
+            return;
+          }
+          requestAnimationFrame(scan);
+        };
+        requestAnimationFrame(scan);
+        return true;
+      } catch(e){
+        console.warn('jsQR failed:', e);
+        return false;
+      }
+    }
+
+    function startQuagga(){
+      if (!window.Quagga) return false;
+      Quagga.init({
+        inputStream: { type: 'LiveStream', target: video, constraints: { facingMode: 'environment' } },
+        decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader'] }
+      }, function(err){
+        if (err) { console.error(err); return; }
+        Quagga.start(); quaggaStarted = true;
+      });
+      Quagga.onDetected(function(result){
+        const raw = result?.codeResult?.code ?? '';
+        if (raw) onDetectedRaw(raw);
+      });
+      return true;
+    }
+
+    function stopScan(){
+      overlay.classList.add('hidden');
+      jsqrActive = false;
+      if (quaggaStarted && window.Quagga) { Quagga.stop(); quaggaStarted = false; }
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      video.srcObject = null;
+    }
+
+    scanBtn.addEventListener('click', async () => {
+      clearTextbox(true, false);
+      overlay.classList.remove('hidden');
+      const okNative = await startNativeDetector();
+      if (!okNative) {
+        const okJs = await startJsQR();
+        if (!okJs) startQuagga();
+      }
+    });
+    closeScan.addEventListener('click', stopScan);
 
     // init
     renderHist();

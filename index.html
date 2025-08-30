@@ -120,6 +120,7 @@
     function buildCard(d) {
       const code = d.CODE || '';
       const desc = d.DESCRIPTION || '';
+      const cate = d['CATE CODE'] || '';
       const promo = formatPercent(d['PROMOTION(CF)']);
       const promoCode = d['PROMO CODE'] || '';
       return `
@@ -127,6 +128,7 @@
           <div class="grid grid-cols-1 gap-3">
             <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${escapeHtml(code)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${escapeHtml(desc)}</div></div>
+             <div><div class="text-xs uppercase tracking-wide text-slate-500">CATE</div><div class="text-base">${escapeHtml(cate)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div><div class="text-base">${escapeHtml(promo)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMO CODE</div><div class="text-base">${escapeHtml(promoCode)}</div></div>
           </div>
@@ -364,3 +366,4 @@
   </script>
 </body>
 </html>
+

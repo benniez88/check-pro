@@ -134,7 +134,7 @@
           <div class="grid grid-cols-1 gap-3">
             <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${escapeHtml(code)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${escapeHtml(desc)}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">CATEGORY</div><div class="text-base">${escapeHtml(cate)}</div></div>
+            ${cate ? `<div><div class="text-xs uppercase tracking-wide text-slate-500">CATEGORY</div><div class="text-base">${escapeHtml(cate)}</div></div>` : ''}
             <div>
               <div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div>
               <div class="text-base font-bold text-red-600">${escapeHtml(promo)}</div>
@@ -200,4 +200,3 @@
   </script>
 </body>
 </html>
-

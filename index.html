@@ -124,7 +124,7 @@
       const promo = formatPercent(d['PROMOTION(CF)']);
       const promoCode = d['PROMO CODE'] || '';
       // เพิ่มตัวแปรสำหรับรับค่า Eff.Date จาก Google Sheet (ชื่อคอลัมน์ต้องตรงกัน)
-      const effDate = d['EFF.DATE'] || ''; 
+      const effDate = d.EFF_DATE || '';
 
       return `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 relative">
@@ -373,4 +373,5 @@
   </script>
 </body>
 </html>
+
 

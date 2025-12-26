@@ -123,8 +123,15 @@
       const cate = d.CATEGORY || '';
       const promo = formatPercent(d['PROMOTION(CF)']);
       const promoCode = d['PROMO CODE'] || '';
+      // เพิ่มตัวแปรสำหรับรับค่า Eff.Date จาก Google Sheet (ชื่อคอลัมน์ต้องตรงกัน)
+      const effDate = d['EFF.DATE'] || ''; 
+
       return `
-        <div class="glass rounded-2xl p-5 shadow-lg border border-white/50">
+        <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 relative">
+          ${effDate ? `<div class="absolute top-4 right-5 text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-lg border border-red-100">
+            Eff. Date: ${escapeHtml(effDate)}
+          </div>` : ''}
+
           <div class="grid grid-cols-1 gap-3">
             <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${escapeHtml(code)}</div></div>
             <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${escapeHtml(desc)}</div></div>
@@ -366,3 +373,4 @@
   </script>
 </body>
 </html>
+

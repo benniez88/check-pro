@@ -3,183 +3,410 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Product Lookup – CODE Search</title>
+  <title>Product Lookup – Final V2</title>
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Fallback สำหรับ 1D barcode -->
   <script defer src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
-  <!-- Fallback สำหรับ QR บน iPhone -->
   <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
   <style>
-    .glass { background: rgba(255,255,255,0.65); backdrop-filter: blur(10px); }
+    .glass { background: rgba(255,255,255,0.75); backdrop-filter: blur(12px); }
     .focus-ring:focus { outline: none; box-shadow: 0 0 0 4px rgba(37,99,235,0.25); }
     .shine { position: relative; overflow: hidden; }
     .shine::after { content: ""; position: absolute; top:0; left:-150%; width:50%; height:100%; transform: skewX(-20deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); animation: slide 2s ease-in-out infinite; }
     @keyframes slide { 0% { left: -150%; } 60% { left: 200%; } 100% { left: 200%; } }
+    .radio-label { transition: all 0.2s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    
+    /* Scan Line Animation */
+    @keyframes scanLine { 0% { transform: translateY(-80px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateY(80px); opacity: 0; } }
   </style>
 </head>
-<body class="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 text-slate-800">
+<body class="min-h-screen bg-gradient-to-br from-slate-100 to-slate-300 text-slate-800 font-sans">
   <div class="max-w-xl mx-auto px-4 py-8">
-    <header class="mb-6">
-      <h1 class="text-2xl font-semibold tracking-tight">Product Lookup</h1>
-      <p class="text-sm text-slate-500">ค้นหาด้วยรหัสสินค้า (CODE)</p>
+    
+    <header class="mb-6 text-center">
+      <h1 class="text-3xl font-bold tracking-tight text-slate-800">Product Lookup</h1>
+      <p class="text-sm text-slate-500 mt-1">ค้นหาสินค้าจาก Database</p>
     </header>
 
-    <div class="glass rounded-2xl p-4 shadow-lg border border-white/50">
-      <div class="flex gap-2">
-        <input id="q" type="text" inputmode="text" autocomplete="off"
-               placeholder="พิมพ์/สแกน CODE แล้วกด Enter หรือปุ่มค้นหา"
-               class="w-full px-4 py-3 rounded-xl border border-slate-200 focus-ring text-base" />
-        <button id="clear" class="px-3 py-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[.98] transition" title="ล้างค่า">ล้าง</button>
-        <button id="scan"  class="px-3 py-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[.98] transition" title="สแกนบาร์โค้ด">สแกน</button>
-        <button id="btn"
-          class="inline-flex items-center justify-center h-12 px-6 rounded-xl bg-black text-white
-                 text-base font-semibold leading-none text-center hover:opacity-90 active:scale-[.98]
-                 transition shine">ค้นหา</button>
-      </div>
-      <div class="mt-2 text-xs text-slate-500">
-        รองรับ Handheld/Tablet, การยิงบาร์โค้ด และกล้อง (ต้องเปิดผ่าน HTTPS และใน Safari โดยตรง ไม่ใช่ in-app browser)
+    <div class="mb-6 flex justify-center">
+      <div class="glass p-1.5 rounded-xl inline-flex space-x-1 shadow-sm border border-white/60">
+        <label class="cursor-pointer relative">
+          <input type="radio" name="dbType" value="TP" checked class="peer sr-only" />
+          <span class="radio-label flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-slate-500 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:shadow-md hover:bg-slate-50">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 17h6"/></svg>
+            Clearance TP
+          </span>
+        </label>
+        <label class="cursor-pointer relative">
+          <input type="radio" name="dbType" value="SMM" class="peer sr-only" />
+          <span class="radio-label flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-slate-500 peer-checked:bg-purple-600 peer-checked:text-white peer-checked:shadow-md hover:bg-slate-50">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            SMM
+          </span>
+        </label>
       </div>
     </div>
 
-    <section id="result" class="mt-6"></section>
-
-    <section class="mt-6 grid gap-4">
-      <div class="glass rounded-2xl p-4 shadow border border-white/50">
-        <div class="flex items-center justify-between">
-          <h2 class="font-semibold">ประวัติการค้นหา</h2>
-          <button id="clearHist" class="text-xs text-slate-500 underline">ล้างประวัติ</button>
+    <div class="glass rounded-2xl p-4 shadow-xl border border-white/60 relative z-10">
+      <div class="flex gap-2">
+        <div class="relative w-full">
+           <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+           </div>
+           <input id="q" type="text" inputmode="text" autocomplete="off"
+               placeholder="พิมพ์รหัส หรือสแกน..."
+               class="w-full pl-10 pr-4 py-3.5 rounded-xl border border-slate-200 bg-white/80 focus-ring text-lg font-mono tracking-tight text-slate-800 placeholder:font-sans placeholder:text-slate-400" />
         </div>
-        <ul id="histList" class="mt-3 space-y-2 text-sm"></ul>
+        
+        <button id="clear" class="px-3.5 rounded-xl bg-white border border-slate-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 active:scale-[.95] transition text-slate-500" title="ล้างค่า">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+        
+        <button id="scan" class="px-3.5 rounded-xl bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-[.95] transition text-slate-500" title="สแกนบาร์โค้ด">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 11h10"/></svg>
+        </button>
+        
+        <button id="btn"
+          class="hidden sm:inline-flex items-center justify-center px-6 rounded-xl bg-slate-800 text-white
+                 text-base font-semibold hover:bg-slate-700 active:scale-[.95]
+                 transition shine shadow-lg">
+           ค้นหา
+        </button>
+      </div>
+    </div>
+
+    <section id="result" class="mt-8 min-h-[120px]"></section>
+
+    <section class="mt-10">
+      <div class="glass rounded-2xl p-5 shadow-sm border border-white/50">
+        <div class="flex items-center justify-between mb-3 border-b border-slate-200/50 pb-2">
+          <h2 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ประวัติการค้นหาล่าสุด
+          </h2>
+          <button id="clearHist" class="text-[10px] text-slate-400 hover:text-red-500 transition font-medium bg-slate-100 px-2 py-1 rounded-md">ล้างทั้งหมด</button>
+        </div>
+        <ul id="histList" class="space-y-2 text-sm max-h-48 overflow-y-auto pr-1 custom-scrollbar"></ul>
       </div>
     </section>
   </div>
 
-  <!-- Scan overlay -->
-  <div id="scanOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl w-full max-w-md p-4 relative">
-      <button id="closeScan" class="absolute right-3 top-3 text-slate-400">✕</button>
-      <div class="mb-2 text-sm text-slate-600">เล็งกล้องไปที่บาร์โค้ด</div>
-      <!-- สำคัญมากสำหรับ iPhone: muted + playsinline -->
-      <video id="video" autoplay playsinline muted class="w-full rounded-lg bg-black"></video>
-      <canvas id="canvas" class="hidden"></canvas>
-      <div class="text-xs text-slate-500 mt-2">ถ้าอุปกรณ์ไม่รองรับ จะใช้ jsQR/Quagga ให้อัตโนมัติ</div>
+  <div id="scanOverlay" class="fixed inset-0 bg-black/90 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl w-full max-w-md p-5 relative shadow-2xl overflow-hidden">
+      <button id="closeScan" class="absolute right-4 top-4 z-10 text-slate-500 hover:text-slate-800 bg-white/80 rounded-full p-2 backdrop-blur">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+      
+      <div class="mb-4 text-center mt-2">
+        <h3 class="font-bold text-xl text-slate-800">สแกนบาร์โค้ด</h3>
+        <p class="text-xs text-slate-500 mt-1">วางบาร์โค้ดให้อยู่ในกรอบสีแดง</p>
+      </div>
+      
+      <div class="relative rounded-2xl overflow-hidden bg-black aspect-[4/3] shadow-inner">
+        <video id="video" autoplay playsinline muted class="w-full h-full object-cover opacity-80"></video>
+        <canvas id="canvas" class="hidden"></canvas>
+        <div class="absolute inset-0 border-2 border-red-500/30 rounded-2xl pointer-events-none flex items-center justify-center">
+           <div class="w-[85%] h-[2px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-[scanLine_2s_ease-in-out_infinite]"></div>
+        </div>
+      </div>
+      <div class="text-[10px] text-slate-400 mt-4 text-center bg-slate-50 py-2 rounded-lg">
+        Tap to focus • Auto-detect format
+      </div>
     </div>
   </div>
 
   <script>
+    // *** แก้ไข URL เป็น Web App URL ของคุณ ***
     const API_URL = "https://script.google.com/macros/s/AKfycbwrKgKw0JFqwQX4-0sL90paBc4BLDPOiQyyWEUOx9MTetLfiUlabG1y6igSa-91RD-L/exec";
 
-    // ===== Utils =====
+    // ===== Sound Effect =====
+    function beep() {
+      try {
+        const audio = new AudioContext();
+        const v = audio.createOscillator();
+        const u = audio.createGain();
+        v.connect(u);
+        v.frequency.value = 1000;
+        v.type = "square";
+        u.connect(audio.destination);
+        v.start(0);
+        u.gain.setValueAtTime(0.1, audio.currentTime); 
+        u.gain.exponentialRampToValueAtTime(0.00001, audio.currentTime + 0.15);
+        setTimeout(() => { v.stop(0); }, 150);
+      } catch(e) {}
+    }
+
+    // ===== Helpers =====
     function digitsOnly(s){ return String(s ?? '').replace(/\D+/g,''); }
     function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     function escapeAttr(s){ return String(s).replace(/'/g,'&#39;'); }
-
-    // ตัด "ตำแหน่งที่ 5–11 จากซ้าย" (1-based) แบบตายตัวเสมอ (และเก็บเฉพาะตัวเลขก่อน)
+    
     function normalizeCode(raw) {
       const s = digitsOnly(raw).trim();
+      if (s.length === 7) return s; 
       return (s.length >= 11) ? s.slice(4, 11) : s;
     }
 
-    // ===== Percent Formatter =====
     function formatPercent(value) {
       if (value == null || value === '') return '';
       let s = String(value).trim();
-      const hasPercent = s.includes('%');
       const num = parseFloat(s.replace(/[^\d.\-]/g, ''));
       if (Number.isNaN(num)) return s;
-      let pct = hasPercent ? num : (num <= 1 ? num * 100 : num);
+      let pct = s.includes('%') ? num : (num <= 1 ? num * 100 : num);
       const r = Math.round(pct * 100) / 100;
       return (Number.isInteger(r) ? r.toString() : r.toFixed(2)) + '%';
     }
 
-    // ===== History =====
-    const LS_KEY_HIST = 'lookup_history_v2';
+    function formatNumber(num) {
+      if (!num && num !== 0) return '-';
+      let n = parseFloat(String(num).replace(/,/g, '')); 
+      if (isNaN(n)) return num;
+      return n.toLocaleString('en-US');
+    }
+
+    // ===== History System =====
+    const LS_KEY_HIST = 'lookup_history_v5';
     const getHist = () => JSON.parse(localStorage.getItem(LS_KEY_HIST) || '[]');
-    const setHist = (arr) => localStorage.setItem(LS_KEY_HIST, JSON.stringify(arr.slice(0,50)));
+    const setHist = (arr) => localStorage.setItem(LS_KEY_HIST, JSON.stringify(arr.slice(0,30)));
+    
     function renderHist(){
       const ul = document.getElementById('histList');
       const hist = getHist();
-      ul.innerHTML = hist.map(({code, description}) =>
-        `<li><button class="underline" onclick="quickSearch('${escapeAttr(code)}')">${escapeHtml(code)}${description ? ' — ' + escapeHtml(description) : ''}</button></li>`
-      ).join('') || '<li class="text-slate-400">— ไม่มี —</li>';
+      if (hist.length === 0) {
+        ul.innerHTML = '<li class="text-slate-400 text-center py-4 italic text-xs">ยังไม่มีประวัติการค้นหา</li>';
+        return;
+      }
+      ul.innerHTML = hist.map(({code, description, source}) => {
+        const isSMM = source === 'SMM';
+        return `
+        <li class="flex items-center justify-between bg-white/60 px-3 py-2.5 rounded-xl border border-slate-100 hover:bg-white hover:shadow-sm transition group cursor-pointer"
+            onclick="quickSearch('${escapeAttr(code)}', '${escapeAttr(source)}')">
+           <div class="flex-1 min-w-0 mr-3">
+             <div class="flex items-center gap-2">
+                <span class="font-mono font-bold text-slate-700 text-sm group-hover:text-blue-600 transition">${escapeHtml(code)}</span>
+                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isSMM ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}">${source || 'TP'}</span>
+             </div>
+             ${description ? `<div class="text-slate-500 text-xs truncate mt-0.5">${escapeHtml(description)}</div>` : ''}
+           </div>
+           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-300 group-hover:text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+         </li>`;
+      }).join('');
     }
+
     function addHist(entry){
-      const e = { code: entry.code || '', description: entry.description || '' };
-      if (!e.code) return;
+      if (!entry.code) return;
       const hist = getHist();
-      const idx = hist.findIndex(x => (x.code || '').toLowerCase() === e.code.toLowerCase());
+      const idx = hist.findIndex(x => 
+        (x.code || '').toLowerCase() === entry.code.toLowerCase() && 
+        x.source === entry.source 
+      );
       if (idx !== -1) hist.splice(idx,1);
-      hist.unshift(e);
+      hist.unshift(entry);
       setHist(hist);
       renderHist();
     }
 
-    // ===== UI Builders =====
+    // ===== UI Builders (Updated) =====
     function buildCard(d) {
+      const source = d._source || 'TP';
       const code = d.CODE || '';
       const desc = d.DESCRIPTION || '';
-      const cate = d.CATEGORY || '';
-      const promo = formatPercent(d['PROMOTION(CF)']);
-      const promoCode = d['PROMO CODE'] || '';
-      // เพิ่มตัวแปรสำหรับรับค่า Eff.Date จาก Google Sheet (ชื่อคอลัมน์ต้องตรงกัน)
+      const promoCode = d['PROMO CODE'] || '-';
       const effDate = d.EFF_DATE || '';
 
-      return `
-        <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 relative">
-          ${effDate ? `<div class="absolute top-4 right-5 text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-lg border border-red-100">
-            Eff. Date: ${escapeHtml(effDate)}
-          </div>` : ''}
+      // ฟอร์แมตวันที่แบบเน้นชัด (High Contrast)
+      const dateBadgeHTML = effDate 
+        ? `<div class="bg-white shadow-sm px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 ${source === 'SMM' ? 'text-purple-700' : 'text-blue-700'}">
+             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+             Eff.Date: ${escapeHtml(effDate)}
+           </div>` 
+        : '';
 
-          <div class="grid grid-cols-1 gap-3">
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">CODE</div><div class="text-lg font-semibold">${escapeHtml(code)}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">DESCRIPTION</div><div class="text-base">${escapeHtml(desc)}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">CATEGORY</div><div class="text-base">${escapeHtml(cate)}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMOTION(CF)</div><div class="text-base">${escapeHtml(promo)}</div></div>
-            <div><div class="text-xs uppercase tracking-wide text-slate-500">PROMO CODE</div><div class="text-base">${escapeHtml(promoCode)}</div></div>
+      // --- LAYOUT A: SMM (สีม่วง) ---
+      if (source === 'SMM') {
+        const price = formatNumber(d.ORIGINAL_PRICE);
+        const discount = d['PROMOTION(CF)'] || '-';
+        const condition = d.CONDITION || '-';
+        const hasDiscount = discount !== '-' && discount !== '' && discount !== '0%';
+
+        return `
+        <div class="glass rounded-2xl shadow-xl border border-white/60 relative overflow-hidden animate-[fadeIn_0.3s_ease-out]">
+          
+          <div class="bg-purple-600 text-white px-5 py-3 flex justify-between items-center shadow-md">
+            <div class="font-bold tracking-widest text-xs flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/></svg>
+              SMM DATABASE
+            </div>
+            ${dateBadgeHTML}
+          </div>
+
+          <div class="p-5 space-y-5">
+            <div>
+              <div class="flex items-baseline gap-2 mb-1">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product Code</span>
+                <span class="text-2xl font-mono font-bold text-slate-800 select-all">${escapeHtml(code)}</span>
+              </div>
+              <div class="text-sm font-medium text-slate-700 leading-snug border-l-4 border-purple-200 pl-3 py-0.5">
+                ${escapeHtml(desc)}
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+               <div class="bg-white/60 p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                 <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">ราคาปกติ</div>
+                 <div class="text-2xl font-extrabold text-slate-800 tracking-tight">${escapeHtml(price)}<span class="text-xs font-normal text-slate-500 ml-1">฿</span></div>
+               </div>
+               
+               <div class="bg-white/60 p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-center ${hasDiscount ? 'ring-2 ring-red-100 bg-red-50/30' : ''}">
+                  <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">ส่วนลด</div>
+                  <div class="text-lg font-bold ${hasDiscount ? 'text-red-600' : 'text-slate-400'} leading-tight">
+                    ${escapeHtml(discount)}
+                  </div>
+               </div>
+            </div>
+
+            <div class="space-y-3 pt-1">
+               <div class="flex items-center justify-between border-b border-slate-200/50 pb-2 border-dashed">
+                  <span class="text-xs font-bold text-slate-400 uppercase">Promo Code</span>
+                  <span class="font-mono text-sm font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-md border border-purple-100">
+                    ${escapeHtml(promoCode)}
+                  </span>
+               </div>
+
+               <div class="bg-yellow-50 rounded-lg p-3 border border-yellow-100 relative">
+                  <div class="flex items-center gap-2 mb-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-yellow-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span class="text-[10px] font-bold text-yellow-700 uppercase tracking-wide">เงื่อนไขเพิ่มเติม</span>
+                  </div>
+                  <div class="text-xs text-slate-700 leading-relaxed pl-1">
+                    ${escapeHtml(condition) === '-' ? 'ไม่ระบุเงื่อนไข' : escapeHtml(condition)}
+                  </div>
+               </div>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      // --- LAYOUT B: TP (สีฟ้า) - ปรับปรุงใหม่ ใส่ราคา ---
+      const cate = d.CATEGORY || '';
+      const promo = formatPercent(d['PROMOTION(CF)']);
+      // ใช้ d.ORIGINAL_PRICE เพราะ Backend map มาให้แล้ว
+      const price = formatNumber(d.ORIGINAL_PRICE); 
+      
+      return `
+        <div class="glass rounded-2xl shadow-xl border border-white/60 relative overflow-hidden animate-[fadeIn_0.3s_ease-out]">
+          <div class="bg-blue-600 text-white px-5 py-3 flex justify-between items-center shadow-md">
+            <div class="font-bold tracking-widest text-xs flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>
+              TP CLEARANCE
+            </div>
+            ${dateBadgeHTML}
+          </div>
+
+          <div class="p-5 space-y-4">
+            <div>
+              <div class="flex items-baseline gap-2 mb-1">
+                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product Code</span>
+                 <span class="text-2xl font-mono font-bold text-slate-800 select-all">${escapeHtml(code)}</span>
+              </div>
+              <div class="text-base font-medium text-slate-700 leading-snug border-l-4 border-blue-200 pl-3 py-0.5">${escapeHtml(desc)}</div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+               <div class="bg-white/60 p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                 <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">ราคาปกติ</div>
+                 <div class="text-2xl font-extrabold text-slate-800 tracking-tight">${escapeHtml(price)}<span class="text-xs font-normal text-slate-500 ml-1">฿</span></div>
+               </div>
+
+               <div class="bg-white/60 p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                 <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Category</div>
+                 <div class="text-sm text-slate-600 font-medium">${escapeHtml(cate)}</div>
+               </div>
+            </div>
+
+            <div class="flex items-center justify-between border-b border-slate-200/50 pb-2 border-dashed">
+               <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Promo Code</span>
+               <div class="text-sm text-slate-700 font-mono font-bold bg-slate-50 px-2.5 py-1 rounded inline-block border border-slate-200">${escapeHtml(promoCode)}</div>
+            </div>
+
+            <div class="pt-1">
+               <div class="bg-green-50 p-3 rounded-xl border border-green-100 flex items-center justify-between shadow-sm">
+                  <span class="text-[10px] uppercase tracking-wider text-green-700 font-bold">Promotion (CF)</span>
+                  <span class="text-xl font-bold text-green-600">${escapeHtml(promo) || 'N/A'}</span>
+               </div>
+            </div>
           </div>
         </div>`;
     }
+
+    // ===== App Logic =====
     function showLoading(){
       document.getElementById('result').innerHTML = `
         <div class="glass rounded-2xl p-5 shadow-lg border border-white/50 animate-pulse">
-          <div class="h-4 bg-slate-200 rounded w-24 mb-4"></div>
-          <div class="space-y-3">
-            <div class="h-6 bg-slate-200 rounded"></div>
-            <div class="h-6 bg-slate-200 rounded"></div>
-            <div class="h-6 bg-slate-200 rounded"></div>
-            <div class="h-6 bg-slate-200 rounded"></div>
+          <div class="flex justify-between mb-6 bg-slate-200/50 h-8 rounded-lg w-full"></div>
+          <div class="space-y-4">
+            <div class="h-6 bg-slate-200/50 rounded w-1/3"></div>
+            <div class="h-4 bg-slate-200/50 rounded w-3/4"></div>
+            <div class="grid grid-cols-2 gap-4 mt-4">
+               <div class="h-12 bg-slate-200/50 rounded-xl"></div>
+               <div class="h-12 bg-slate-200/50 rounded-xl"></div>
+            </div>
           </div>
         </div>`;
     }
-    function showEmpty(msg='ไม่พบข้อมูล หรือ CODE นี้ไม่ร่วม PRO Clearance'){
-      document.getElementById('result').innerHTML = `<div class="text-center text-slate-500">${msg}</div>`;
+
+    function showEmpty(msg='ไม่พบข้อมูลสินค้า'){
+      document.getElementById('result').innerHTML = `
+        <div class="flex flex-col items-center justify-center p-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-white/30">
+           <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+           </svg>
+           <span class="text-sm font-medium">${msg}</span>
+        </div>`;
     }
 
     async function search(q){
       const code = normalizeCode(q);
-      if (!code) { showEmpty('กรุณาพิมพ์ CODE'); return; }
+      if (!code) { showEmpty('กรุณาพิมพ์หรือสแกน CODE'); return; }
+      
       showLoading();
+      const dbType = document.querySelector('input[name="dbType"]:checked').value;
+
       try{
         const url = new URL(API_URL);
         url.searchParams.set('q', code);
+        url.searchParams.set('type', dbType);
+
         const res = await fetch(url.toString(), { cache: 'no-store' });
         const json = await res.json();
+        
         if (json && json.data) {
           const d = json.data;
+          d._source = d._source || dbType; 
+          
           document.getElementById('result').innerHTML = buildCard(d);
-          addHist({ code: d.CODE || '', description: d.DESCRIPTION || '' });
+          addHist({ 
+            code: d.CODE || '', 
+            description: d.DESCRIPTION || '',
+            source: d._source
+          });
         } else {
-          showEmpty();
+          showEmpty(`ไม่พบ CODE: <span class="font-mono font-bold text-slate-600">${code}</span> ใน ${dbType}`);
         }
       } catch(e){
         console.error(e);
-        showEmpty('เกิดข้อผิดพลาดในการดึงข้อมูล');
+        showEmpty('เกิดข้อผิดพลาดในการเชื่อมต่อ');
       }
     }
 
-    // ===== Elements & helpers =====
+    // Event Bindings
     const qInput   = document.getElementById('q');
     const btnSearch= document.getElementById('btn');
     const btnClear = document.getElementById('clear');
@@ -190,188 +417,144 @@
       if (focusBack) qInput.focus();
     }
 
-    window.quickSearch = (c) => {
+    window.quickSearch = (c, src) => {
       clearTextbox(false);
+      if (src) {
+        const radio = document.querySelector(`input[name="dbType"][value="${src}"]`);
+        if (radio) radio.checked = true;
+      }
       const code = normalizeCode(c);
       qInput.value = code;
       if (code.length === 7) search(code);
     };
 
     btnSearch.addEventListener('click', () => search(qInput.value));
-    btnClear.addEventListener('click', () => clearTextbox(true, false));
+    btnClear.addEventListener('click', () => clearTextbox(true, true));
 
-    // keyboard wedge (debounced)
+    // Keyboard handling
     let scanTimer = null;
-    const SCAN_IDLE_MS = 120;
     qInput.addEventListener('input', () => {
       if (scanTimer) clearTimeout(scanTimer);
       scanTimer = setTimeout(() => {
         const code = normalizeCode(qInput.value);
         qInput.value = code;
         if (code.length === 7) search(code);
-      }, SCAN_IDLE_MS);
+      }, 150);
     });
     qInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const code = normalizeCode(qInput.value);
-        qInput.value = code;
-        search(code);
+        search(qInput.value);
       }
     });
-
     document.getElementById('clearHist').addEventListener('click', () => {
       localStorage.removeItem(LS_KEY_HIST);
       renderHist();
     });
 
-    // ===== Scanner (iPhone-safe) =====
+    // ===== Scanner =====
     const scanBtn   = document.getElementById('scan');
     const overlay   = document.getElementById('scanOverlay');
     const closeScan = document.getElementById('closeScan');
     const video     = document.getElementById('video');
     const canvas    = document.getElementById('canvas');
     const ctx       = canvas.getContext('2d', { willReadFrequently: true });
-
     let stream = null;
     let quaggaStarted = false;
     let jsqrActive = false;
 
     function onDetectedRaw(raw){
-      clearTextbox(false);
+      beep();
       const code = normalizeCode(raw);
       stopScan();
       qInput.value = code;
       if (code.length === 7) search(code);
+      else showEmpty('รหัสไม่ถูกต้อง: ' + code);
     }
 
     async function startNativeDetector(){
       const BarcodeDetectorClass = window.BarcodeDetector;
-      if (!BarcodeDetectorClass) return false; // iPhone ส่วนใหญ่จะมาทางนี้
-
+      if (!BarcodeDetectorClass) return false; 
       const formats = ['ean_13','ean_8','code_128','code_39','upc_e','upc_a','itf','qr_code'];
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: 'environment' } }
-        });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' } } });
         video.srcObject = stream;
-        video.muted = true;
         await video.play();
-
         const detector = new BarcodeDetectorClass({ formats });
-
         const scan = async () => {
           if (overlay.classList.contains('hidden')) return;
-
           try {
-            // บางเบราว์เซอร์ไม่มี createImageBitmap → ใช้ canvas แทน
             let codes = [];
             if ('createImageBitmap' in window) {
               const bmp = await createImageBitmap(video);
               codes = await detector.detect(bmp);
             } else {
-              const w = video.videoWidth, h = video.videoHeight;
-              if (w && h) {
-                canvas.width = w; canvas.height = h;
-                ctx.drawImage(video, 0, 0, w, h);
-                codes = await detector.detect(canvas);
-              }
+              canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+              ctx.drawImage(video, 0, 0);
+              codes = await detector.detect(canvas);
             }
-            if (codes && codes.length) {
-              const raw = codes[0]?.rawValue || '';
-              if (raw) return onDetectedRaw(raw);
-            }
-          } catch(e){ /* ignore frame errors */ }
-
+            if (codes.length) return onDetectedRaw(codes[0].rawValue);
+          } catch(e){}
           requestAnimationFrame(scan);
         };
         requestAnimationFrame(scan);
         return true;
-      } catch(e){
-        console.warn('Native detector failed:', e);
-        return false;
-      }
+      } catch(e){ return false; }
     }
 
-    async function startJsQR(){ // ใช้ได้ดีบน iPhone/Safari
+    async function startJsQR(){
       if (typeof jsQR === 'undefined') return false;
       try{
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: 'environment' } }
-        });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' } } });
         video.srcObject = stream;
-        video.muted = true;
         await video.play();
-
         jsqrActive = true;
-
         const scan = () => {
           if (!jsqrActive || overlay.classList.contains('hidden')) return;
-
-          const w = video.videoWidth, h = video.videoHeight;
-          if (!w || !h) { requestAnimationFrame(scan); return; }
-
-          canvas.width = w; canvas.height = h;
-          ctx.drawImage(video, 0, 0, w, h);
-          const imageData = ctx.getImageData(0, 0, w, h);
-          const result = jsQR(imageData.data, w, h, { inversionAttempts: "dontInvert" });
-          if (result && result.data) {
-            onDetectedRaw(result.data);
-            return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+             canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+             ctx.drawImage(video, 0, 0);
+             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+             const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+             if (code) { onDetectedRaw(code.data); return; }
           }
           requestAnimationFrame(scan);
         };
         requestAnimationFrame(scan);
         return true;
-      } catch(e){
-        console.warn('jsQR failed:', e);
-        return false;
-      }
+      } catch(e){ return false; }
     }
 
-    function startQuagga(){ // 1D barcode fallback (ไม่รองรับ QR)
+    function startQuagga(){
       if (!window.Quagga) return false;
       Quagga.init({
         inputStream: { type: 'LiveStream', target: video, constraints: { facingMode: 'environment' } },
-        decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','itf_reader'] }
+        decoder: { readers: ['ean_reader','code_128_reader'] }
       }, function(err){
-        if (err) { console.error(err); return; }
+        if (err) return;
         Quagga.start(); quaggaStarted = true;
       });
-      Quagga.onDetected(function(result){
-        const raw = result?.codeResult?.code ?? '';
-        if (raw) onDetectedRaw(raw);
-      });
+      Quagga.onDetected(function(result){ if (result?.codeResult?.code) onDetectedRaw(result.codeResult.code); });
       return true;
     }
 
     function stopScan(){
       overlay.classList.add('hidden');
       jsqrActive = false;
-      if (quaggaStarted && window.Quagga) { Quagga.stop(); quaggaStarted = false; }
+      if (quaggaStarted) { Quagga.stop(); quaggaStarted = false; }
       if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-      video.srcObject = null;
     }
 
     scanBtn.addEventListener('click', async () => {
-      clearTextbox(true, false); // เริ่มสแกนใหม่ → เคลียร์ช่องก่อน
+      clearTextbox(true, false);
       overlay.classList.remove('hidden');
-
-      // ลำดับ fallback: Native → jsQR (iPhone) → Quagga (1D)
-      const okNative = await startNativeDetector();
-      if (!okNative) {
-        const okJs = await startJsQR();
-        if (!okJs) startQuagga();
+      if (!(await startNativeDetector())) {
+        if (!(await startJsQR())) startQuagga();
       }
     });
     closeScan.addEventListener('click', stopScan);
 
-    // init
     renderHist();
   </script>
 </body>
 </html>
-
-
